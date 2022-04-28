@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
-use std::{path::PathBuf, fs::{read_dir, self, File}, io::Read};
+use serde_json::Error;
+use std::{path::PathBuf, fs::{read_dir, self, File, OpenOptions}, io::Read};
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -7,7 +8,7 @@ use serde::Serialize;
 #[serde(rename_all = "camelCase")]
 pub struct MapData {
     #[serde(rename = "_artist")]
-    pub artist: String,
+    pub artist: Option<String>,
     #[serde(rename = "_difficulties")]
     pub difficulties: Vec<String>,
     #[serde(rename = "_mappers")]
@@ -19,6 +20,7 @@ pub struct MapData {
     #[serde(rename = "_version")]
     pub version: i64,
 }
+
 
 
 #[derive(Parser)]
@@ -44,15 +46,29 @@ fn main() {
                 if metdata.is_dir() {
                     let path = dir_item.path();
 
-                    let map_data_path = path.join("map.json");
-                    if let Ok(mut map_file) = File::open(map_data_path) {
-                        let mut file_data = String::new();
-                        if map_file.read_to_string(&mut file_data).is_ok() {
-                            let map_data:MapData = serde_json::from_str(&file_data).unwrap();
-                            let new_music_name = sanitize(&map_data.music);
-                            if new_music_name != map_data.music {
-                                println!("rename<F> :{}", map_data.music);
-                                fs::rename(path.join(map_data.music), path.join(new_music_name)).unwrap();
+                    let map_data_path = path.join("meta.json");
+                    if let Ok(mut map_file) = File::open(&map_data_path) {                    
+                        let mut map_data_unsafe:Result<MapData,Error> = serde_json::from_reader(&map_file);
+                        match map_data_unsafe {
+                            Ok(mut map_data) => {
+                                let song_name = map_data.music[..map_data.music.len()-4].to_string();
+                                let new_music_name = sanitize(&song_name);
+                                // println!("{:?}", new_music_name);
+                                if new_music_name != song_name {
+                                    let music_with_ext = format!("{}.mp3",new_music_name);
+                                    println!("rename<F> : {} @ {:?}", music_with_ext,map_data_path);
+                                    if fs::rename(path.join(map_data.music), path.join(&music_with_ext)).is_err(){
+                                        println!("unable to rename")
+                                    }
+                                    map_data.music = music_with_ext;
+                                    map_file = OpenOptions::new().write(true).truncate(true).open(&map_data_path).unwrap();
+                                    if let Err(e) = serde_json::to_writer(map_file, &map_data) {
+                                        println!("unable to write meta.json <{:?}>",e);
+                                    }
+                                }
+                            }
+                            Err(e) =>{
+                                println!("serde read err {:?} | {:?}", e,&map_data_path);
                             }
                         }
 
@@ -60,7 +76,7 @@ fn main() {
                     let current_dir_name = dir_item.file_name().to_str().unwrap().to_string();
                     let new_name : String = sanitize(&current_dir_name);
                     if current_dir_name != new_name {
-                        println!("rename<D> :{}", current_dir_name);
+                        println!("rename<D> : {}", current_dir_name);
                         fs::rename(&path, path.parent().unwrap().join(&new_name)).expect("unable to rename file");
                     }
                     // println!("{:?} | {}", dir_item.file_name(),new_name);
