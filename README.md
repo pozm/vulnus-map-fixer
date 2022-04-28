@@ -2,6 +2,8 @@
 
 fixes broken maps on vulnus.
 
+## notice
+Make sure to back up your maps before using incase of failure.
 
 ## how to use?
 download from releases. once you have the binary, place it somewhere and open where ever it's saved in command prompt or powershell and run `vulnus-map-fixer.exe <MAPS DIRECTORY>` and it should output everything which it fixes.
